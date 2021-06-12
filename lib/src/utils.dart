@@ -52,17 +52,29 @@ List<int> intToByte(Curve curve, BigInt i) {
 }
 
 BigInt getK(Curve curve, AffinePoint pointR, BigInt k0) {
-	if (big.Jacobi(Ry, Curve.P) == 1) {
+	if (pointR.Y.isEven) { // isEven
 		return k0;
 	}
 
-	return curve.n -  k0;
+	return curve.n - k0;
 }
 
-func getE(Px, Py *big.Int, rX []byte, m [32]byte) *big.Int {
-	r := append(rX, Marshal(Curve, Px, Py)...)
-	r = append(r, m[:]...)
-	h := sha256.Sum256(r)
-	i := new(big.Int).SetBytes(h[:])
-	return i.Mod(i, Curve.N)
+BigInt getE(Curve curve, AffinePoint pointP, List<int> rX,List<int> m) {
+	var r = rX + marshal(curve, pointP);
+	r = r + m;
+	var h = sha256.convert(r).bytes;
+	var i = BigInt.parse(List<String>.generate(h.length, (i) => h[i].toRadixString(16).padLeft(2, '0')).join(), radix: 16);
+	return i % curve.n;
+}
+
+/// [marshal] converts a point into the form specified in section 2.3.3 of the
+/// SEC 1 standard.
+List<int> marshal(Curve curve, AffinePoint p) {
+  var hex = curve.publicKeyToCompressedHex(p as PublicKey);
+
+	return List<int>.generate(hex.length~/2, (i) => int.parse(hex.substring(i*2, i*2+2), radix: 16));
+}
+
+int bigJacobi(BigInt x, y) {
+
 }

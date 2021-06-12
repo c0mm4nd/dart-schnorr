@@ -1,4 +1,3 @@
-import 'package:ecdsa/ecdsa.dart';
 import 'package:elliptic/elliptic.dart';
 
 void main() {

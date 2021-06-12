@@ -60,11 +60,11 @@ Signature signature(PrivateKey priv, List<int> hash) {
 	var k0 = deterministicGetK0(curve, d, hash);
 
 	var pointR = curve.scalarBaseMul(intToByte(curve, k0));
-	var k = getK(pointR.Y, k0);
+	var k = getK(curve, pointR, k0); // getEvenKey
 
 	var pointP = curve.scalarBaseMul(d);
 	var rX = intToByte(curve, pointR.X);
-	var e = getE(pointP, rX, hash);
+	var e = getE(curve, pointP, rX, hash);
 	e = e* priv.D;
 	k = k+ e;
 	k = k % curve.n;
