@@ -1,12 +1,11 @@
 import 'package:elliptic/elliptic.dart';
 import 'package:ninja_asn1/ninja_asn1.dart';
-import 'dart:math';
 
 import 'utils.dart';
 
 class ErrInvalidCurve implements Exception {}
-class ErrInvalidPriv implements Exception {}
 
+class ErrInvalidPriv implements Exception {}
 
 class Signature {
   late BigInt R;
@@ -52,66 +51,57 @@ class Signature {
 Signature signature(PrivateKey priv, List<int> hash) {
   var curve = priv.curve;
 
-	if ((priv.D < BigInt.one) || priv.D >  curve.n  - BigInt.one {
-		throw ErrInvalidPriv(); //the private key must be an integer in the range 1..n-1
-	}
+  if ((priv.D < BigInt.one) || priv.D > curve.n - BigInt.one) {
+    throw ErrInvalidPriv(); //the private key must be an integer in the range 1..n-1
+  }
 
-	var d = intToByte(curve, priv.D);
-	var k0 = deterministicGetK0(curve, d, hash);
+  var d = intToByte(curve, priv.D);
+  var k0 = deterministicGetK0(curve, d, hash);
 
-	var pointR = curve.scalarBaseMul(intToByte(curve, k0));
-	var k = getK(curve, pointR, k0); // getEvenKey
+  var pointR = curve.scalarBaseMul(intToByte(curve, k0));
+  var k = getK(curve, pointR, k0); // getEvenKey
 
-	var pointP = curve.scalarBaseMul(d);
-	var rX = intToByte(curve, pointR.X);
-	var e = getE(curve, pointP, rX, hash);
-	e = e* priv.D;
-	k = k+ e;
-	k = k % curve.n;
+  var pointP = curve.scalarBaseMul(d);
+  var rX = intToByte(curve, pointR.X);
+  var e = getE(curve, pointP, rX, hash);
+  e = e * priv.D;
+  k = k + e;
+  k = k % curve.n;
 
-	var R = pointR.X;
-	var S = k;
-	return Signature.fromRS(R, S);
+  var R = pointR.X;
+  var S = k;
+  return Signature.fromRS(R, S);
 }
 
 /// [verify] verifies the signature in r, s of hash using the public key, pub.
 /// Its return value records whether the signature is valid.
 bool verify(PublicKey pub, List<int> hash, Signature sig) {
-  // See [NSA] 3.4.2
   var curve = pub.curve;
-  var byteLen = (curve.bitSize + 7) ~/ 8;
 
-  if (sig.R.sign <= 0 || sig.S.sign <= 0) {
+  if (!curve.isOnCurve(pub)) {
+    throw Exception('signature verification failed');
+  }
+
+  var r = sig.R;
+  if (r >= curve.p) {
+    throw Exception('r is larger than or equal to field size');
+  }
+
+  var s = sig.S;
+  if (s >= curve.n) {
+    throw Exception('s is larger than or equal to curve order');
+  }
+
+  var e = getE(curve, pub, intToByte(curve, r), hash);
+  var sG = curve.scalarBaseMul(intToByte(curve, s));
+  // e.Sub(Curve.N, e)
+  var eP = curve.scalarMul(pub, intToByte(curve, e));
+  eP.Y = curve.p - eP.Y;
+  var R = curve.add(sG, eP);
+
+  if ((R.X.sign == 0 && R.Y.sign == 0) || !R.Y.isEven || R.X != r) {
     return false;
   }
 
-  if (sig.R >= curve.n || sig.S >= curve.n) {
-    return false;
-  }
-
-  var e = hashToInt(hash, curve);
-  var w = sig.S.modInverse(curve.n);
-
-  var u1 = e * w;
-  u1 = u1 % curve.n;
-  var u2 = sig.R * w;
-  u2 = u2 % curve.n;
-
-  // Check if implements S1*g + S2*p
-  var hexU1 = u1.toRadixString(16).padLeft(byteLen * 2, '0');
-  var hexU2 = u2.toRadixString(16).padLeft(byteLen * 2, '0');
-  var p1 = curve.scalarBaseMul(List<int>.generate(hexU1.length ~/ 2,
-      (i) => int.parse(hexU1.substring(i * 2, i * 2 + 2), radix: 16)));
-  var p2 = curve.scalarMul(
-      pub,
-      List<int>.generate(hexU2.length ~/ 2,
-          (i) => int.parse(hexU2.substring(i * 2, i * 2 + 2), radix: 16)));
-  var p = curve.add(p1, p2);
-
-  if (p.X.sign == 0 && p.Y.sign == 0) {
-    return false;
-  }
-
-  p.X = p.X % curve.n;
-  return p.X == sig.R;
+  return true;
 }

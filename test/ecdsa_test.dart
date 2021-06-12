@@ -1,6 +1,6 @@
-import 'package:ecdsa/src/signature.dart';
-import 'package:ecdsa/src/utils.dart';
 import 'package:elliptic/elliptic.dart';
+import 'package:schnorr/schnorr.dart';
+import 'package:schnorr/src/utils.dart';
 import 'package:test/test.dart';
 
 void main() {

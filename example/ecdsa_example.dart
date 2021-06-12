@@ -1,4 +1,5 @@
 import 'package:elliptic/elliptic.dart';
+import 'package:schnorr/schnorr.dart';
 
 void main() {
   var ec = getP256();

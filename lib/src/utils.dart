@@ -52,29 +52,30 @@ List<int> intToByte(Curve curve, BigInt i) {
 }
 
 BigInt getK(Curve curve, AffinePoint pointR, BigInt k0) {
-	if (pointR.Y.isEven) { // isEven
-		return k0;
-	}
+  if (pointR.Y.isEven) {
+    // isEven
+    return k0;
+  }
 
-	return curve.n - k0;
+  return curve.n - k0;
 }
 
-BigInt getE(Curve curve, AffinePoint pointP, List<int> rX,List<int> m) {
-	var r = rX + marshal(curve, pointP);
-	r = r + m;
-	var h = sha256.convert(r).bytes;
-	var i = BigInt.parse(List<String>.generate(h.length, (i) => h[i].toRadixString(16).padLeft(2, '0')).join(), radix: 16);
-	return i % curve.n;
+BigInt getE(Curve curve, AffinePoint pointP, List<int> rX, List<int> m) {
+  var r = rX + marshal(curve, pointP);
+  r = r + m;
+  var h = sha256.convert(r).bytes;
+  var i = BigInt.parse(
+      List<String>.generate(
+          h.length, (i) => h[i].toRadixString(16).padLeft(2, '0')).join(),
+      radix: 16);
+  return i % curve.n;
 }
 
 /// [marshal] converts a point into the form specified in section 2.3.3 of the
 /// SEC 1 standard.
 List<int> marshal(Curve curve, AffinePoint p) {
-  var hex = curve.publicKeyToCompressedHex(p as PublicKey);
+  var hex = curve.publicKeyToCompressedHex(PublicKey.fromPoint(curve, p));
 
-	return List<int>.generate(hex.length~/2, (i) => int.parse(hex.substring(i*2, i*2+2), radix: 16));
-}
-
-int bigJacobi(BigInt x, y) {
-
+  return List<int>.generate(hex.length ~/ 2,
+      (i) => int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16));
 }
