@@ -44,11 +44,11 @@ class Signature {
   }
 }
 
-/// [signature] signs a hash (which should be the result of hashing a larger message)
+/// [deterministicSign] signs a hash (which should be the result of hashing a larger message)
 /// using the private key, priv. If the hash is longer than the bit-length of the
 /// private key's curve order, the hash will be truncated to that length. It
 /// returns the signature as a pair of integers.
-Signature signature(PrivateKey priv, List<int> hash) {
+Signature deterministicSign(PrivateKey priv, List<int> hash) {
   var curve = priv.curve;
 
   if ((priv.D < BigInt.one) || priv.D > curve.n - BigInt.one) {
@@ -59,8 +59,10 @@ Signature signature(PrivateKey priv, List<int> hash) {
   var k0 = deterministicGetK0(curve, d, hash);
 
   var pointR = curve.scalarBaseMul(intToByte(curve, k0));
+  print(pointR.X);
+  print(pointR.Y);
   var k = getK(curve, pointR, k0); // getEvenKey
-
+  print(k);
   var pointP = curve.scalarBaseMul(d);
   var rX = intToByte(curve, pointR.X);
   var e = getE(curve, pointP, rX, hash);
@@ -73,13 +75,14 @@ Signature signature(PrivateKey priv, List<int> hash) {
   return Signature.fromRS(R, S);
 }
 
-/// [verify] verifies the signature in r, s of hash using the public key, pub.
-/// Its return value records whether the signature is valid.
+/// [verify] a signature of a 32 byte message against the public key.
+/// Returns an error if verification fails.
+/// https://github.com/sipa/bips/blob/bip-schnorr/bip-schnorr.mediawiki#verification
 bool verify(PublicKey pub, List<int> hash, Signature sig) {
   var curve = pub.curve;
 
   if (!curve.isOnCurve(pub)) {
-    throw Exception('signature verification failed');
+    throw Exception('public key is not on curve ' + curve.name);
   }
 
   var r = sig.R;
@@ -93,13 +96,17 @@ bool verify(PublicKey pub, List<int> hash, Signature sig) {
   }
 
   var e = getE(curve, pub, intToByte(curve, r), hash);
+  print(e);
   var sG = curve.scalarBaseMul(intToByte(curve, s));
-  // e.Sub(Curve.N, e)
+  print(sG.X.toString() + ' ' + sG.Y.toString());
   var eP = curve.scalarMul(pub, intToByte(curve, e));
+  print(eP.X.toString() + ' ' + eP.Y.toString());
   eP.Y = curve.p - eP.Y;
+  print(eP.Y.toString());
   var R = curve.add(sG, eP);
+  print(R.X.toString() + ' ' + R.Y.toString());
 
-  if ((R.X.sign == 0 && R.Y.sign == 0) || !R.Y.isEven || R.X != r) {
+  if ((R.X.sign == 0 && R.Y.sign == 0) || jacobi(R.Y, curve.p) != 1 || R.X != r) {
     return false;
   }
 

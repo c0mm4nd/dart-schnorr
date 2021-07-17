@@ -1,5 +1,6 @@
 import 'package:crypto/crypto.dart';
 import 'package:elliptic/elliptic.dart';
+import 'package:ninja_asn1/ninja_asn1.dart';
 
 /// [hashToInt] converts a hash value to an integer. There is some disagreement
 /// about how this is done. [NSA] suggests that this is done in the obvious
@@ -52,8 +53,7 @@ List<int> intToByte(Curve curve, BigInt i) {
 }
 
 BigInt getK(Curve curve, AffinePoint pointR, BigInt k0) {
-  if (pointR.Y.isEven) {
-    // isEven
+  if (jacobi(pointR.Y, curve.p) == 1) {
     return k0;
   }
 
@@ -78,4 +78,79 @@ List<int> marshal(Curve curve, AffinePoint p) {
 
   return List<int>.generate(hex.length ~/ 2,
       (i) => int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16));
+}
+
+int jacobi(BigInt x, BigInt y) {
+  if (y.isEven) {
+    throw Exception(
+        'big: invalid 2nd argument to Int.Jacobi: need odd integer but got' +
+            y.toString());
+  }
+
+  // We use the formulation described in chapter 2, section 2.4,
+  // "The Yacas Book of Algorithms":
+  // http://yacas.sourceforge.net/Algo.book.pdf
+
+  // var c BigInt
+  var a = x;
+  var b = y;
+  var j = 1;
+
+  if (b.isNegative) {
+    if (a.isNegative) {
+      j = -1;
+    }
+    b = -b;
+  }
+
+  var big3 = BigInt.one + BigInt.two;
+  var big5 = big3 + BigInt.two;
+  var big7 = big5 + BigInt.two;
+
+  while (true) {
+    if (b == BigInt.one) {
+      return j;
+    }
+    if (a == BigInt.zero) {
+      return 0;
+    }
+
+    a = a % b;
+    if (a == BigInt.zero) {
+      return 0;
+    }
+    // a > 0
+
+    // Find the largest power of 2 that divides a. Say, a = 2s c
+    // where c is odd. Replace ab by cb (−1)s b 2−1 8 (iden
+    // handle factors of 2 in 'a'
+    var s = highestFactorsOf2(a);
+    if (s & 1 != 0) {
+      var bmod8 = b & big7;
+      if (bmod8 == big3 || bmod8 == big5) {
+        j = -j;
+      }
+    }
+    var c = a >> s; // a = 2^s*c
+
+    // swap numerator and denominator
+    if (b & big3 == big3 && c & big3 == big3) {
+      j = -j;
+    }
+    a = b;
+    b = c;
+  }
+}
+
+int highestFactorsOf2(BigInt x) {
+  // check for the set bits
+  var bits = x.toRadixString(2);
+
+  for (var i = 1; i < bits.length; i++) {
+    if (bits[bits.length - i] != '0') {
+      return i -1;
+    }
+  }
+
+  return 0;
 }

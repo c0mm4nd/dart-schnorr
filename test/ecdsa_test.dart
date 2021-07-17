@@ -10,8 +10,9 @@ void main() {
     });
 
     test('Usage Test', () {
-      var ec = getP256();
-      var priv = ec.generatePrivateKey();
+      var ec = getS256();
+      var priv = PrivateKey.fromHex(ec,
+          'd07b57eb3cd1a308b2fa04d97552f00b1d59efc0200affd1edafc98700ce3290');
       var pub = priv.publicKey;
       print(priv);
       print(pub);
@@ -19,7 +20,15 @@ void main() {
           'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9';
       var hash = List<int>.generate(hashHex.length ~/ 2,
           (i) => int.parse(hashHex.substring(i * 2, i * 2 + 2), radix: 16));
-      var sig = signature(priv, hash);
+      var sig = deterministicSign(priv, hash);
+      print(sig.R.toRadixString(16).padLeft(32, '0') +
+          ' ' +
+          sig.S.toRadixString(16).padLeft(32, '0'));
+
+      expect(sig.R.toRadixString(16).padLeft(32, '0'),
+          'f3aa5bcc0e9f3f629c89830aed5aafa268e17a649c2535db86dfe23337123498');
+      expect(sig.S.toRadixString(16).padLeft(32, '0'),
+          'abad44d88d91e2925086372e703dbbbf4fd5834f2879e14cc25e0dc8a9f7629c');
 
       var result = verify(pub, hash, sig);
       expect(result, isTrue);
