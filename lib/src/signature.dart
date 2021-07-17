@@ -1,3 +1,5 @@
+import 'dart:core';
+
 import 'package:elliptic/elliptic.dart';
 import 'package:ninja_asn1/ninja_asn1.dart';
 
@@ -106,9 +108,173 @@ bool verify(PublicKey pub, List<int> hash, Signature sig) {
   var R = curve.add(sG, eP);
   print(R.X.toString() + ' ' + R.Y.toString());
 
-  if ((R.X.sign == 0 && R.Y.sign == 0) || jacobi(R.Y, curve.p) != 1 || R.X != r) {
+  if ((R.X.sign == 0 && R.Y.sign == 0) ||
+      jacobi(R.Y, curve.p) != 1 ||
+      R.X != r) {
     return false;
   }
 
   return true;
+}
+
+// BatchVerify verifies a list of 64 byte signatures of 32 byte messages against the public keys.
+// Returns an error if verification fails.
+// https://github.com/sipa/bips/blob/bip-schnorr/bip-schnorr.mediawiki#batch-verification
+bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
+    List<Signature> signatures) {
+  if (publicKeys.isEmpty) {
+    throw Exception('publicKeys must be an array with one or more elements');
+  }
+  if (messages.isEmpty) {
+    throw Exception('messages must be an array with one or more elements');
+  }
+  if (signatures.isEmpty) {
+    throw Exception('signatures must be an array with one or more elements');
+  }
+  if (publicKeys.length != messages.length ||
+      messages.length != signatures.length) {
+    throw Exception('all parameters must be an array with the same length');
+  }
+
+  var curve = publicKeys[0].curve;
+
+  var ls = BigInt.zero;
+  var a = BigInt.one;
+  var rs = AffinePoint();
+
+  var big7 = BigInt.from(7);
+  var big4 = BigInt.from(4);
+
+  var result = false;
+  for (final i in signatures.asMap().keys) {
+    var signature = signatures[i];
+    var publicKey = publicKeys[i];
+    var message = messages[i];
+    if (curve != publicKey.curve) {
+      throw Exception('publickeys must be on the same curve');
+    }
+
+    if (!curve.isOnCurve(publicKey)) {
+      throw Exception('publickey is not on the curve');
+    }
+
+    var r = signature.R;
+    if (r >= curve.p) {
+      throw Exception('r is larger than or equal to field size');
+    }
+    var s = signature.S;
+    if (s >= curve.n) {
+      throw Exception('s is larger than or equal to curve order');
+    }
+
+    var e = getE(curve, publicKey, intToByte(curve, r), message);
+
+    var r2 = r.pow(3);
+    r2 = r2 + big7;
+    r2 = r2 % curve.p;
+    var c = r2;
+    var exp = curve.p + BigInt.one;
+    exp = exp ~/ big4;
+
+    var y = c.modPow(exp, curve.p);
+
+    if (y.modPow(BigInt.two, curve.p) != c) {
+      break;
+    }
+
+    var R = AffinePoint.fromXY(r, y);
+
+    if (i != 0) {
+      a = deterministicGetRandA(curve);
+    }
+
+    var aR = curve.scalarMul(R, intToByte(curve, a));
+    var ae = (a * e);
+    var aeHex = ae.toRadixString(16).padLeft((ae.bitLength + 7) ~/ 8, '0');
+    var aeBytes = List<int>.generate((ae.bitLength + 7) ~/ 8,
+        (index) => int.parse(aeHex.substring(2 * index, 2 * index + 2)));
+    var aeP = curve.scalarMul(publicKey, aeBytes);
+    rs = curve.add(rs, aR);
+    rs = curve.add(rs, aeP);
+    s = s * a;
+    ls = ls + s;
+  }
+
+  var G = curve.scalarBaseMul(intToByte(curve, ls % curve.n));
+  if (G != rs) {
+    return false;
+  }
+
+  return result;
+}
+
+// AggregateSignatures aggregates multiple signatures of different private keys over
+// the same message into a single 64 byte signature.
+Signature aggregateSign(List<PrivateKey> privateKeys, List<int> message) {
+  if (privateKeys.isEmpty) {
+    throw Exception('privateKeys must be an array with one or more elements');
+  }
+
+  var k0s = List<BigInt>.filled(privateKeys.length, BigInt.zero);
+  var P = AffinePoint();
+  var R = AffinePoint();
+  var curve = privateKeys[0].curve;
+  var privMap = privateKeys.asMap();
+
+  for (final i in privMap.keys) {
+    if (privateKeys[i].curve != curve) {
+      throw Exception('privatekeys must be on the same curve');
+    }
+
+    if (privateKeys[i].D < BigInt.one ||
+        privateKeys[i].D > curve.n - BigInt.one) {
+      throw Exception('the private key must be an integer in the range 1..n-1');
+    }
+
+    var d = intToByte(curve, privateKeys[i].D);
+    var k0i = deterministicGetK0(curve, d, message);
+
+    var Ri = curve.scalarBaseMul(intToByte(curve, k0i));
+    var Pi = curve.scalarBaseMul(d);
+
+    k0s[i] = k0i;
+
+    R = curve.add(R, Ri);
+    P = curve.add(P, Pi);
+  }
+
+  var rX = intToByte(curve, R.X);
+  var e = getE(curve, P, rX, message);
+  var s = BigInt.zero;
+
+  for (final j in k0s.asMap().keys) {
+    var k = getK(curve, R, k0s[j]);
+    k = k + (e * privateKeys[j].D);
+    s = s + k;
+  }
+
+  return Signature.fromRS(R.X, s % curve.n);
+}
+
+// CombinePublicKeys can combine public keys
+PublicKey combinePublicKeys(List<PublicKey> pubs) {
+  if (pubs.isEmpty) {
+    throw Exception('pks must be an array with one or more elements');
+  }
+
+  if (pubs.length == 1) {
+    return pubs[0];
+  }
+
+  var p = AffinePoint.fromXY(pubs[0].X, pubs[0].Y);
+  var curve = pubs[0].curve;
+  for (var i = 1; i < pubs.length; i++) {
+    if (pubs[i].curve != curve) {
+      throw Exception('publickeys must be on the same curve');
+    }
+
+    p = curve.add(p, pubs[i]);
+  }
+
+  return PublicKey.fromPoint(curve, p);
 }

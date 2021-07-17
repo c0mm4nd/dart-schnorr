@@ -1,6 +1,7 @@
+import 'dart:math';
+
 import 'package:crypto/crypto.dart';
 import 'package:elliptic/elliptic.dart';
-import 'package:ninja_asn1/ninja_asn1.dart';
 
 /// [hashToInt] converts a hash value to an integer. There is some disagreement
 /// about how this is done. [NSA] suggests that this is done in the obvious
@@ -148,9 +149,20 @@ int highestFactorsOf2(BigInt x) {
 
   for (var i = 1; i < bits.length; i++) {
     if (bits[bits.length - i] != '0') {
-      return i -1;
+      return i - 1;
     }
   }
 
   return 0;
+}
+
+BigInt deterministicGetRandA(Curve curve) {
+  var rand = Random.secure();
+  var nMinus2 = curve.n - BigInt.two;
+  var a = BigInt.parse(
+      List<String>.generate(
+          nMinus2.bitLength, (index) => rand.nextInt(1).toString()).join(),
+      radix: 2);
+
+  return a + BigInt.one;
 }
