@@ -6,3 +6,4 @@
 library ecdsa;
 
 export 'src/signature.dart';
+export 'src/err.dart';

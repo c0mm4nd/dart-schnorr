@@ -3,6 +3,8 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:elliptic/elliptic.dart';
 
+import 'err.dart';
+
 /// [hashToInt] converts a hash value to an integer. There is some disagreement
 /// about how this is done. [NSA] suggests that this is done in the obvious
 /// manner, but [SECG] truncates the hash to the bit-length of the curve order
@@ -27,8 +29,6 @@ BigInt hashToInt(List<int> hash, Curve c) {
   return ret;
 }
 
-class ErrZeroK0 implements Exception {}
-
 BigInt deterministicGetK0(Curve curve, List<int> d, List<int> hash) {
   var h = sha256.convert(d + hash).bytes;
 
@@ -39,7 +39,7 @@ BigInt deterministicGetK0(Curve curve, List<int> d, List<int> hash) {
   var k0 = i % curve.n;
 
   if (k0.sign == 0) {
-    throw ErrZeroK0(); //"k0 is zero"
+    throw SchnorrException('k0 is zero');
   }
 
   return k0;
@@ -81,11 +81,11 @@ List<int> marshal(Curve curve, AffinePoint p) {
       (i) => int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16));
 }
 
+/// [jacobi] calcs the jacobi symbol (a.k.a. the Legendre symbol).
 int jacobi(BigInt x, BigInt y) {
   if (y.isEven) {
     throw Exception(
-        'big: invalid 2nd argument to Int.Jacobi: need odd integer but got' +
-            y.toString());
+        'invalid 2nd argument to jacobi: need odd int but got' + y.toString());
   }
 
   // We use the formulation described in chapter 2, section 2.4,
@@ -95,6 +95,7 @@ int jacobi(BigInt x, BigInt y) {
   // var c BigInt
   var a = x;
   var b = y;
+  var c = BigInt.zero;
   var j = 1;
 
   if (b.isNegative) {
@@ -132,7 +133,8 @@ int jacobi(BigInt x, BigInt y) {
         j = -j;
       }
     }
-    var c = a >> s; // a = 2^s*c
+
+    c = a >> s; // a = 2^s*c
 
     // swap numerator and denominator
     if (b & big3 == big3 && c & big3 == big3) {

@@ -3,6 +3,7 @@ import 'dart:core';
 import 'package:elliptic/elliptic.dart';
 import 'package:ninja_asn1/ninja_asn1.dart';
 
+import 'err.dart';
 import 'utils.dart';
 
 class ErrInvalidCurve implements Exception {}
@@ -22,7 +23,7 @@ class Signature {
   }
 
   Signature.fromASN1Hex(String asn1Hex) {
-    var asn1Bytes = List<int>.generate(asn1Hex.length ~/ 2,
+    var asn1Bytes = List<int>.generate(asn1Hex.length >> 1,
         (i) => int.parse(asn1Hex.substring(i * 2, i * 2 + 2), radix: 16));
     var p = ASN1Sequence.decode(asn1Bytes);
     R = (p.children[0] as ASN1Integer).value;
@@ -67,10 +68,21 @@ Signature deterministicSign(PrivateKey priv, List<int> hash) {
   print(k);
   var pointP = curve.scalarBaseMul(d);
   var rX = intToByte(curve, pointR.X);
+  print(pointP.X.toString() +
+      ' ' +
+      pointP.Y.toString() +
+      ' ' +
+      rX.toString() +
+      ' ' +
+      hash.toString());
   var e = getE(curve, pointP, rX, hash);
+  print('e:' + e.toString());
   e = e * priv.D;
+  print(e);
   k = k + e;
+  print(k);
   k = k % curve.n;
+  print(k);
 
   var R = pointR.X;
   var S = k;
@@ -84,29 +96,24 @@ bool verify(PublicKey pub, List<int> hash, Signature sig) {
   var curve = pub.curve;
 
   if (!curve.isOnCurve(pub)) {
-    throw Exception('public key is not on curve ' + curve.name);
+    throw SchnorrException('public key is not on curve ' + curve.name);
   }
 
   var r = sig.R;
   if (r >= curve.p) {
-    throw Exception('r is larger than or equal to field size');
+    throw SchnorrException('r is larger than or equal to field size');
   }
 
   var s = sig.S;
   if (s >= curve.n) {
-    throw Exception('s is larger than or equal to curve order');
+    throw SchnorrException('s is larger than or equal to curve order');
   }
 
   var e = getE(curve, pub, intToByte(curve, r), hash);
-  print(e);
   var sG = curve.scalarBaseMul(intToByte(curve, s));
-  print(sG.X.toString() + ' ' + sG.Y.toString());
   var eP = curve.scalarMul(pub, intToByte(curve, e));
-  print(eP.X.toString() + ' ' + eP.Y.toString());
   eP.Y = curve.p - eP.Y;
-  print(eP.Y.toString());
   var R = curve.add(sG, eP);
-  print(R.X.toString() + ' ' + R.Y.toString());
 
   if ((R.X.sign == 0 && R.Y.sign == 0) ||
       jacobi(R.Y, curve.p) != 1 ||
@@ -123,17 +130,21 @@ bool verify(PublicKey pub, List<int> hash, Signature sig) {
 bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
     List<Signature> signatures) {
   if (publicKeys.isEmpty) {
-    throw Exception('publicKeys must be an array with one or more elements');
+    throw SchnorrException(
+        'publicKeys must be an array with one or more elements');
   }
   if (messages.isEmpty) {
-    throw Exception('messages must be an array with one or more elements');
+    throw SchnorrException(
+        'messages must be an array with one or more elements');
   }
   if (signatures.isEmpty) {
-    throw Exception('signatures must be an array with one or more elements');
+    throw SchnorrException(
+        'signatures must be an array with one or more elements');
   }
   if (publicKeys.length != messages.length ||
       messages.length != signatures.length) {
-    throw Exception('all parameters must be an array with the same length');
+    throw SchnorrException(
+        'all parameters must be an array with the same length');
   }
 
   var curve = publicKeys[0].curve;
@@ -143,7 +154,6 @@ bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
   var rs = AffinePoint();
 
   var big7 = BigInt.from(7);
-  var big4 = BigInt.from(4);
 
   var result = false;
   for (final i in signatures.asMap().keys) {
@@ -151,20 +161,20 @@ bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
     var publicKey = publicKeys[i];
     var message = messages[i];
     if (curve != publicKey.curve) {
-      throw Exception('publickeys must be on the same curve');
+      throw SchnorrException('publickeys must be on the same curve');
     }
 
     if (!curve.isOnCurve(publicKey)) {
-      throw Exception('publickey is not on the curve');
+      throw SchnorrException('publickey is not on the curve');
     }
 
     var r = signature.R;
     if (r >= curve.p) {
-      throw Exception('r is larger than or equal to field size');
+      throw SchnorrException('r is larger than or equal to field size');
     }
     var s = signature.S;
     if (s >= curve.n) {
-      throw Exception('s is larger than or equal to curve order');
+      throw SchnorrException('s is larger than or equal to curve order');
     }
 
     var e = getE(curve, publicKey, intToByte(curve, r), message);
@@ -174,7 +184,7 @@ bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
     r2 = r2 % curve.p;
     var c = r2;
     var exp = curve.p + BigInt.one;
-    exp = exp ~/ big4;
+    exp = exp >> 2;
 
     var y = c.modPow(exp, curve.p);
 
@@ -190,8 +200,8 @@ bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
 
     var aR = curve.scalarMul(R, intToByte(curve, a));
     var ae = (a * e);
-    var aeHex = ae.toRadixString(16).padLeft((ae.bitLength + 7) ~/ 8, '0');
-    var aeBytes = List<int>.generate((ae.bitLength + 7) ~/ 8,
+    var aeHex = ae.toRadixString(16).padLeft((ae.bitLength + 7) >> 3, '0');
+    var aeBytes = List<int>.generate((ae.bitLength + 7) >> 3,
         (index) => int.parse(aeHex.substring(2 * index, 2 * index + 2)));
     var aeP = curve.scalarMul(publicKey, aeBytes);
     rs = curve.add(rs, aR);
@@ -212,7 +222,8 @@ bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
 // the same message into a single 64 byte signature.
 Signature aggregateSign(List<PrivateKey> privateKeys, List<int> message) {
   if (privateKeys.isEmpty) {
-    throw Exception('privateKeys must be an array with one or more elements');
+    throw SchnorrException(
+        'privateKeys must be an array with one or more elements');
   }
 
   var k0s = List<BigInt>.filled(privateKeys.length, BigInt.zero);
@@ -223,12 +234,13 @@ Signature aggregateSign(List<PrivateKey> privateKeys, List<int> message) {
 
   for (final i in privMap.keys) {
     if (privateKeys[i].curve != curve) {
-      throw Exception('privatekeys must be on the same curve');
+      throw SchnorrException('privatekeys must be on the same curve');
     }
 
     if (privateKeys[i].D < BigInt.one ||
         privateKeys[i].D > curve.n - BigInt.one) {
-      throw Exception('the private key must be an integer in the range 1..n-1');
+      throw SchnorrException(
+          'the private key must be an integer in the range 1..n-1');
     }
 
     var d = intToByte(curve, privateKeys[i].D);
@@ -259,7 +271,7 @@ Signature aggregateSign(List<PrivateKey> privateKeys, List<int> message) {
 // CombinePublicKeys can combine public keys
 PublicKey combinePublicKeys(List<PublicKey> pubs) {
   if (pubs.isEmpty) {
-    throw Exception('pks must be an array with one or more elements');
+    throw SchnorrException('pks must be an array with one or more elements');
   }
 
   if (pubs.length == 1) {
@@ -270,7 +282,7 @@ PublicKey combinePublicKeys(List<PublicKey> pubs) {
   var curve = pubs[0].curve;
   for (var i = 1; i < pubs.length; i++) {
     if (pubs[i].curve != curve) {
-      throw Exception('publickeys must be on the same curve');
+      throw SchnorrException('publickeys must be on the same curve');
     }
 
     p = curve.add(p, pubs[i]);

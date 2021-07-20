@@ -14,5 +14,5 @@ dev_dependencies:
   test: ^1.16.0
 dependencies:
   crypto: ^3.0.1
-  elliptic: ^0.3.2
+  elliptic: ^0.3.4
   ninja_asn1: ^2.0.0
