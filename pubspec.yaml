@@ -1,6 +1,6 @@
 name: schnorr
-description: schnorr signature algorithm
-version: 0.0.1
+description: A pure dart package for generic schnorr signature algorithm, supporting all curves in elliptic package. 
+version: 0.0.2
 homepage: https://github.com/c0mm4nd/dart-schnorr
 
 environment:
@@ -14,5 +14,5 @@ dev_dependencies:
   test: ^1.16.0
 dependencies:
   crypto: ^3.0.1
-  elliptic: ^0.3.4
+  elliptic: ^0.3.5
   ninja_asn1: ^2.0.0

@@ -1,9 +1,11 @@
-/// Package ecdsa implements the Elliptic Curve Digital Signature Algorithm, as defined in FIPS 186-3.
+/// Package schnorr implements the Schnorr signature, which is a digital signature
+/// produced by the Schnorr signature algorithm that was described by Claus Schnorr
 ///
-/// This implementation derives the nonce from dartlang random.Secure() temporarily.
+/// The code is based upon the initial proposal of Pieter Wuille when it didn't have
+/// a BIP number assigned yet.
 ///
-/// The curves are all in [elliptic package](https://pub.dev/packages/elliptic)
-library ecdsa;
+/// Support all curves in [elliptic package](https://pub.dev/packages/elliptic)
+library schnorr;
 
 export 'src/signature.dart';
 export 'src/err.dart';
