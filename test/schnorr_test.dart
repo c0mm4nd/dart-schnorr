@@ -262,6 +262,30 @@ void main() {
       }
     });
 
+    test('batchVerify', () {
+      var pubs = <PublicKey>[];
+      var msgs = <List<int>>[];
+      var sigs = <Signature>[];
+      for (final tc in testCases) {
+        if (tc.priv == '') {
+          continue;
+        }
+        var priv = PrivateKey.fromHex(curve, tc.priv);
+        var m = List<int>.generate(tc.m.length ~/ 2,
+            (i) => int.parse(tc.m.substring(2 * i, 2 * i + 2), radix: 16));
+        pubs.add(priv.publicKey);
+        msgs.add(m);
+        sigs.add(deterministicSign(priv, m));
+      }
+
+      // A batch of genuine signatures verifies.
+      expect(batchVerify(pubs, msgs, sigs), isTrue);
+
+      // Tampering with a single signature makes the whole batch fail.
+      sigs[0] = Signature.fromRS(sigs[0].R, (sigs[0].S + BigInt.one) % curve.n);
+      expect(batchVerify(pubs, msgs, sigs), isFalse);
+    });
+
     test('test verify', () {
       for (final tc in testCases) {
         if (tc.sig ==

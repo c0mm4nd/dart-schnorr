@@ -22,9 +22,10 @@ BigInt hashToInt(List<int> hash, Curve c) {
       List<String>.generate(
           hash.length, (i) => hash[i].toRadixString(16).padLeft(2, '0')).join(),
       radix: 16);
+  // Right-shift the excess low bits (SECG/OpenSSL bits2int).
   var excess = hash.length * 8 - orderBits;
   if (excess > 0) {
-    ret >> excess;
+    ret = ret >> excess;
   }
   return ret;
 }
@@ -158,13 +159,25 @@ int highestFactorsOf2(BigInt x) {
   return 0;
 }
 
+// deterministicGetRandA returns a cryptographically secure, uniformly
+// distributed batch-verification coefficient in [1, n-1].
 BigInt deterministicGetRandA(Curve curve) {
   var rand = Random.secure();
-  var nMinus2 = curve.n - BigInt.two;
-  var a = BigInt.parse(
-      List<String>.generate(
-          nMinus2.bitLength, (index) => rand.nextInt(1).toString()).join(),
-      radix: 2);
+  var n = curve.n;
+  var byteLen = (n.bitLength + 7) >> 3;
+  var excess = byteLen * 8 - n.bitLength;
 
-  return a + BigInt.one;
+  while (true) {
+    var bytes = List<int>.generate(byteLen, (_) => rand.nextInt(256));
+    var a = BigInt.zero;
+    for (var b in bytes) {
+      a = (a << 8) | BigInt.from(b & 0xff);
+    }
+    if (excess > 0) {
+      a = a >> excess;
+    }
+    if (a >= BigInt.one && a < n) {
+      return a;
+    }
+  }
 }
