@@ -147,16 +147,17 @@ int jacobi(BigInt x, BigInt y) {
 }
 
 int highestFactorsOf2(BigInt x) {
-  // check for the set bits
-  var bits = x.toRadixString(2);
-
-  for (var i = 1; i < bits.length; i++) {
-    if (bits[bits.length - i] != '0') {
-      return i - 1;
-    }
+  // Number of trailing zero bits, i.e. the exponent of the largest power of 2
+  // dividing x (0 for x == 0). Used by jacobi to factor out powers of two.
+  if (x == BigInt.zero) {
+    return 0;
   }
-
-  return 0;
+  var count = 0;
+  while ((x & BigInt.one) == BigInt.zero) {
+    x = x >> 1;
+    count++;
+  }
+  return count;
 }
 
 // deterministicGetRandA returns a cryptographically secure, uniformly
