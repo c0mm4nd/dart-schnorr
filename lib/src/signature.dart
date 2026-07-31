@@ -1,4 +1,5 @@
 import 'dart:core';
+import 'dart:math';
 
 import 'package:elliptic/elliptic.dart';
 import 'package:ninja_asn1/ninja_asn1.dart';
@@ -140,6 +141,7 @@ bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
   var rs = AffinePoint();
 
   var big7 = BigInt.from(7);
+  var rng = Random.secure();
 
   for (final i in signatures.asMap().keys) {
     var signature = signatures[i];
@@ -185,11 +187,14 @@ bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
     }
 
     var R = AffinePoint.fromXY(r, y);
+    if (!curve.isOnCurve(R)) {
+      return false;
+    }
 
     // Random per-signature coefficient a_i (a_0 == 1) so a forged signature
     // cannot be masked by the linear combination.
     if (i != 0) {
-      a = deterministicGetRandA(curve);
+      a = deterministicGetRandA(curve, rng);
     }
 
     var aR = curve.scalarMul(R, intToByte(curve, a));

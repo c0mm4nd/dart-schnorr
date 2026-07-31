@@ -160,9 +160,10 @@ int highestFactorsOf2(BigInt x) {
 }
 
 // deterministicGetRandA returns a cryptographically secure, uniformly
-// distributed batch-verification coefficient in [1, n-1].
-BigInt deterministicGetRandA(Curve curve) {
-  var rand = Random.secure();
+// distributed batch-verification coefficient in [1, n-1]. An existing
+// [Random] may be supplied to avoid constructing a new secure RNG per call.
+BigInt deterministicGetRandA(Curve curve, [Random? rng]) {
+  var rand = rng ?? Random.secure();
   var n = curve.n;
   var byteLen = (n.bitLength + 7) >> 3;
   var excess = byteLen * 8 - n.bitLength;
