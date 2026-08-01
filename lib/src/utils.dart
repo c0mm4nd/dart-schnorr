@@ -22,9 +22,10 @@ BigInt hashToInt(List<int> hash, Curve c) {
       List<String>.generate(
           hash.length, (i) => hash[i].toRadixString(16).padLeft(2, '0')).join(),
       radix: 16);
+  // Right-shift the excess low bits (SECG/OpenSSL bits2int).
   var excess = hash.length * 8 - orderBits;
   if (excess > 0) {
-    ret >> excess;
+    ret = ret >> excess;
   }
   return ret;
 }
@@ -146,25 +147,39 @@ int jacobi(BigInt x, BigInt y) {
 }
 
 int highestFactorsOf2(BigInt x) {
-  // check for the set bits
-  var bits = x.toRadixString(2);
-
-  for (var i = 1; i < bits.length; i++) {
-    if (bits[bits.length - i] != '0') {
-      return i - 1;
-    }
+  // Number of trailing zero bits, i.e. the exponent of the largest power of 2
+  // dividing x (0 for x == 0). Used by jacobi to factor out powers of two.
+  if (x == BigInt.zero) {
+    return 0;
   }
-
-  return 0;
+  var count = 0;
+  while ((x & BigInt.one) == BigInt.zero) {
+    x = x >> 1;
+    count++;
+  }
+  return count;
 }
 
-BigInt deterministicGetRandA(Curve curve) {
-  var rand = Random.secure();
-  var nMinus2 = curve.n - BigInt.two;
-  var a = BigInt.parse(
-      List<String>.generate(
-          nMinus2.bitLength, (index) => rand.nextInt(1).toString()).join(),
-      radix: 2);
+// deterministicGetRandA returns a cryptographically secure, uniformly
+// distributed batch-verification coefficient in [1, n-1]. An existing
+// [Random] may be supplied to avoid constructing a new secure RNG per call.
+BigInt deterministicGetRandA(Curve curve, [Random? rng]) {
+  var rand = rng ?? Random.secure();
+  var n = curve.n;
+  var byteLen = (n.bitLength + 7) >> 3;
+  var excess = byteLen * 8 - n.bitLength;
 
-  return a + BigInt.one;
+  while (true) {
+    var bytes = List<int>.generate(byteLen, (_) => rand.nextInt(256));
+    var a = BigInt.zero;
+    for (var b in bytes) {
+      a = (a << 8) | BigInt.from(b & 0xff);
+    }
+    if (excess > 0) {
+      a = a >> excess;
+    }
+    if (a >= BigInt.one && a < n) {
+      return a;
+    }
+  }
 }

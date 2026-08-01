@@ -1,4 +1,5 @@
 import 'dart:core';
+import 'dart:math';
 
 import 'package:elliptic/elliptic.dart';
 import 'package:ninja_asn1/ninja_asn1.dart';
@@ -62,27 +63,13 @@ Signature deterministicSign(PrivateKey priv, List<int> hash) {
   var k0 = deterministicGetK0(curve, d, hash);
 
   var pointR = curve.scalarBaseMul(intToByte(curve, k0));
-  print(pointR.X);
-  print(pointR.Y);
-  var k = getK(curve, pointR, k0); // getEvenKey
-  print(k);
+  var k = getK(curve, pointR, k0);
   var pointP = curve.scalarBaseMul(d);
   var rX = intToByte(curve, pointR.X);
-  print(pointP.X.toString() +
-      ' ' +
-      pointP.Y.toString() +
-      ' ' +
-      rX.toString() +
-      ' ' +
-      hash.toString());
   var e = getE(curve, pointP, rX, hash);
-  print('e:' + e.toString());
   e = e * priv.D;
-  print(e);
   k = k + e;
-  print(k);
   k = k % curve.n;
-  print(k);
 
   var R = pointR.X;
   var S = k;
@@ -154,8 +141,8 @@ bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
   var rs = AffinePoint();
 
   var big7 = BigInt.from(7);
+  var rng = Random.secure();
 
-  var result = false;
   for (final i in signatures.asMap().keys) {
     var signature = signatures[i];
     var publicKey = publicKeys[i];
@@ -188,34 +175,38 @@ bool batchVerify(List<PublicKey> publicKeys, List<List<int>> messages,
 
     var y = c.modPow(exp, curve.p);
 
+    // A signature whose r is not a valid x-coordinate is invalid.
     if (y.modPow(BigInt.two, curve.p) != c) {
-      break;
+      return false;
+    }
+
+    // R must be the point whose y has Jacobi symbol 1, matching the signing
+    // convention; otherwise pick the other square root.
+    if (jacobi(y, curve.p) != 1) {
+      y = curve.p - y;
     }
 
     var R = AffinePoint.fromXY(r, y);
+    if (!curve.isOnCurve(R)) {
+      return false;
+    }
 
+    // Random per-signature coefficient a_i (a_0 == 1) so a forged signature
+    // cannot be masked by the linear combination.
     if (i != 0) {
-      a = deterministicGetRandA(curve);
+      a = deterministicGetRandA(curve, rng);
     }
 
     var aR = curve.scalarMul(R, intToByte(curve, a));
-    var ae = (a * e);
-    var aeHex = ae.toRadixString(16).padLeft((ae.bitLength + 7) >> 3, '0');
-    var aeBytes = List<int>.generate((ae.bitLength + 7) >> 3,
-        (index) => int.parse(aeHex.substring(2 * index, 2 * index + 2)));
-    var aeP = curve.scalarMul(publicKey, aeBytes);
+    var aeP = curve.scalarMul(publicKey, intToByte(curve, (a * e) % curve.n));
     rs = curve.add(rs, aR);
     rs = curve.add(rs, aeP);
-    s = s * a;
-    ls = ls + s;
+    ls = (ls + a * s) % curve.n;
   }
 
+  // The batch verifies iff (sum a_i*s_i)*G == sum (a_i*R_i + a_i*e_i*P_i).
   var G = curve.scalarBaseMul(intToByte(curve, ls % curve.n));
-  if (G != rs) {
-    return false;
-  }
-
-  return result;
+  return G == rs;
 }
 
 // AggregateSignatures aggregates multiple signatures of different private keys over
