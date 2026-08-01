@@ -1,5 +1,19 @@
 # dart-schnorr
 
+> **⚠️ Security notice — please upgrade to ≥ 0.0.3**
+>
+> Versions **≤ 0.0.2** had two issues:
+> - `deterministicSign` printed the secret nonce and intermediate values to
+>   stdout. If your process logs were captured, a signing key could be derived
+>   from them. In an ordinary environment that does not log/expose stdout, this
+>   was not exposed.
+> - A bug in the Jacobi-symbol helper could make `verify()` return a wrong
+>   result and signing pick a non-standard nonce for some inputs.
+>
+> **This package does not generate private keys**, so your keys are not weakened
+> by it. Upgrading is recommended (and, if you retained old signing logs, review
+> whether nonces were captured).
+
 Package schnorr implements the Schnorr signature, which is a digital signature
 produced by the Schnorr signature algorithm that was described by Claus Schnorr
 
